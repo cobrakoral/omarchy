@@ -251,3 +251,17 @@ startup.pluginRegistry.scanning = true
 assertEqual(startup.status().state, 'loading', 'a rescan cannot expose a partial readiness verdict')
 
 JS
+
+# The reduced host runs the production loader and status functions against real
+# QML components, without a compositor, session bus service, or desktop cache.
+if command -v quickshell >/dev/null 2>&1; then
+  startup_tmp=$(mktemp -d -t omarchy-startup.XXXXXX)
+  trap 'rm -rf "$startup_tmp"' EXIT
+  if ! python3 "$SHELL_TEST_DIR/fixtures/plugin-startup-check.py" "$ROOT" "$startup_tmp"; then
+    cat "$startup_tmp/runtime.log" >&2
+    fail "real QML startup loading and diagnostics"
+  fi
+  pass "real QML startup loads report errors, exclusions, readiness, and usable IPC"
+else
+  skip "quickshell not installed; real QML startup loading checks"
+fi
