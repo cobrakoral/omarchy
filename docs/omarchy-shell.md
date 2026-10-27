@@ -132,7 +132,7 @@ or `omarchy.power`. There is no `bar` target.
 | `listShellConfig`                     | effective shell.json as JSON    |
 | `debugBarGeometry`                    | bar geometry dump for debugging |
 
-`startupStatus` returns `state` (`loading`, `failed`, or `ready`), `pending`, `errors`, and `warnings`. It waits for initial configuration and plugin discovery, the bar object, enabled first-party service instances, and compiled first-party widgets used by the configured layout. Disabled plugins and widgets outside the layout do not block it. Observed third-party load errors are warnings. This is a startup-load contract: it does not open lazy panels or validate every widget's internal runtime behavior.
+`startupStatus` returns `state` (`loading`, `failed`, or `ready`), `pending`, `errors`, and `warnings`. It waits for initial configuration and plugin discovery, the bar object, enabled first-party service instances, and compiled first-party widgets used by the configured layout. Disabled plugins and widgets outside the layout do not block it. Observed third-party load errors are warnings. This is a startup-load contract: it does not open lazy panels or validate every widget's internal runtime behavior. `omarchy restart shell` checks it after core IPC and any failsafe lock recovery, with a bounded wait and the failing plugin's QML diagnostic on stderr.
 
 `setPluginEnabled` takes a string; only literal `"true"` enables. Methods
 answer on stdout with exit 0 — `ok` on success, `unknown` or an error
