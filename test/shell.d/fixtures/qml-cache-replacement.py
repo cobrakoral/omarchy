@@ -114,7 +114,11 @@ assert run("compile-old-source-after-replacement", inject=True) == ("A", "A")
 assert (out / "replacement.marker").read_text() == "replaced after source read\n"
 cache = list((out / "cache").rglob("*.qmlc"))
 assert cache, "real Qt must write the poisoned cache"
-unit = cache[0].read_bytes()
+replacement_hash = hashlib.md5(b.encode()).digest()
+matching_cache = [path for path in cache if path.read_bytes()[28:44] == replacement_hash]
+assert len(matching_cache) == 1, "identify exactly the cache for replacement B"
+plugin_cache = matching_cache[0]
+unit = plugin_cache.read_bytes()
 assert struct.unpack_from("<q", unit, 16)[0] == -1
 assert unit[28:44] == hashlib.md5(b.encode()).digest(), "old bytecode was saved with the replacement's hash"
 shutil.copytree(out / "cache", out / "poisoned-cache")
@@ -125,7 +129,7 @@ for n in range(2):
 
 assert run("launcher-recovery", through_launcher=True) == ("B", "B")
 assert run("launcher-repeated-recovery", through_launcher=True) == ("B", "B")
-assert cache[0].read_bytes() == unit, "recovery must not delete or rewrite existing caches"
+assert plugin_cache.read_bytes() == unit, "recovery must not delete or rewrite existing caches"
 # The same replacement while running the real launcher must not create new
 # cache entries. Clearing this isolated cache is only a test control.
 shutil.move(out / "cache", out / "retained-cache")
