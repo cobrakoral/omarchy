@@ -932,9 +932,8 @@ fi
 [[ ! -s $launch_log ]] || fail "OpenClaw's agent without the package starts nothing"
 pass "OpenClaw's agent hands a missing command to its launcher only when the package is there"
 
-# Native lazy shims can precede ~/.local/bin. The agent launcher must still run
-# the official command when the default-agent selector recognized one, for
-# every agent and whether or not it is wrapped in env or bash.
+# Launch through PATH whether mise has downloaded its configured tool or not,
+# including agents wrapped in env or bash.
 lazy_shims="$test_tmp/lazy-shims"
 mkdir -p "$lazy_shims"
 for agent in cursor-agent muse claude kiro-cli devin amp dsh hermes; do
@@ -943,9 +942,9 @@ for agent in cursor-agent muse claude kiro-cli devin amp dsh hermes; do
   chmod +x "$test_home/.local/bin/$agent" "$lazy_shims/$agent"
   printf '%s\n' "$agent" >"$agent_file"
   output=$(PATH="$lazy_shims:$PATH" "$ROOT/bin/omarchy-agent" --inline)
-  [[ $output == "official $agent" ]] || fail "agent launcher preserves the user-installed $agent ahead of a mise shim"
+  [[ $output == "lazy shim $agent" ]] || fail "agent launcher honors the selected shim before an uninstalled local $agent"
   output=$(PATH="$lazy_shims:$PATH" omarchy-agent-prompt --inline "Review this project")
-  [[ $output == "official $agent" ]] || fail "prompted agent launcher preserves the user-installed $agent ahead of a mise shim"
+  [[ $output == "lazy shim $agent" ]] || fail "prompted agent launcher honors the selected shim for $agent"
   # Once mise has its own copy installed, a terminal runs that one, so the
   # launcher does too rather than a leftover install in ~/.local/bin.
   output=$(OMARCHY_TEST_AGENT_INSTALLED=true PATH="$lazy_shims:$PATH" "$ROOT/bin/omarchy-agent" --inline)
@@ -957,4 +956,4 @@ for agent in cursor-agent muse claude kiro-cli devin amp dsh hermes; do
   [[ $output == "lazy shim $agent" ]] || fail "agent launcher treats an older one-line mise wrapper for $agent as a wrapper"
   rm "$test_home/.local/bin/$agent" "$lazy_shims/$agent"
 done
-pass "agent launcher runs user-installed agents ahead of native lazy shims"
+pass "agent launcher preserves PATH precedence before and after mise installation"
