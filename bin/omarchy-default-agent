@@ -96,13 +96,35 @@ else
     [[ ! -L $1 ]] && head -c 4096 "$1" | grep -qaE 'mise (use|x) '
   }
 
-  # Anything at the wrapper's path other than the wrapper is the user's own
-  # install, such as the symlink Cursor's installer leaves. A mise copy would
-  # only shadow it, since the mise shims precede ~/.local/bin on PATH.
-  user_install() {
-    [[ -x $HOME/.local/bin/$agent ]] && ! mise_wrapper "$HOME/.local/bin/$agent"
+  # Native mise shims can forward disabled tools to external commands, but an
+  # older Omarchy wrapper runs `mise use` instead. The first non-shim entry on
+  # PATH must be external; a wrapper cannot be skipped for one farther down.
+  agent_external() {
+    local executable mise_binary
+    mise_binary=$(type -P mise) || return 1
+    while IFS= read -r executable; do
+      [[ $executable -ef $mise_binary ]] && continue
+      ! mise_wrapper "$executable"
+      return
+    done < <(type -aP "$agent")
+    return 1
   }
-  agent_present() { user_install || mise where "$agent_tool" &>/dev/null; }
+  agent_disabled() {
+    local disabled
+    disabled=$(MISE_OFFLINE=1 mise settings disable_tools --json) || return 1
+    jq -e --arg tool "$agent_tool" 'index($tool) != null' <<<"$disabled" >/dev/null
+  }
+
+  # A cold offline cache can leave `latest` unresolved and absent from `mise
+  # ls`. Query the raw requests so that only an actual opt-out is unmanaged.
+  agent_unconfigured() {
+    local requests
+    requests=$(MISE_OFFLINE=1 mise tool "$agent_tool" --requested --json) || return 1
+    jq -e '. == null or . == []' <<<"$requests" >/dev/null
+  }
+  # A missing lazy or project version remains a selection, not an opt-out.
+  agent_unmanaged() { agent_unconfigured && agent_external; }
+  agent_present() { agent_unmanaged || mise where "$agent_tool" &>/dev/null; }
   # Omarchy declares the default agents as mise tools, so installing one is
   # enough and leaves the user's config alone. A user who removed the
   # preinstalls, like one without Omarchy's declarations, selects it instead.
@@ -112,7 +134,7 @@ else
     [[ $1 == npm:* || $(mise tool "${1%%\[*}" --backend 2>/dev/null) == npm:* ]]
   }
   agent_install() {
-    user_install && return
+    agent_unmanaged && return
     if omarchy-mise-default-tools declares "$agent_tool"; then
       if npm_backed "$agent_tool"; then
         mise install node "$agent_tool"
@@ -130,6 +152,13 @@ else
       fi
     fi
   }
+
+  # A mise opt-out must not turn an unavailable command into a valid default.
+  # Reject it before saving the selection, including on the --install path.
+  if agent_disabled && ! agent_external; then
+    printf '%s is disabled in mise but %s does not resolve to an external command on PATH\n' "$name" "$agent" >&2
+    exit 1
+  fi
 fi
 
 if [[ $installing == "false" ]] && ! agent_present; then
